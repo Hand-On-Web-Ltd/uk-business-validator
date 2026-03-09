@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Business Validator — Check Any UK Company</title>
+    <meta name="description" content="Validate UK companies instantly. Search by name or number to check company status, registration date, and address.">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 UK Business Validator</h1>
+            <p>Check if a UK company is real and active</p>
+        </header>
+
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="Company name or number (e.g. 12345678)">
+            <button onclick="searchCompany()">Search</button>
+        </div>
+
+        <div id="error" class="error" style="display:none"></div>
+        <div id="loading" class="loading" style="display:none">Searching Companies House...</div>
+
+        <div id="results"></div>
+
+        <footer>
+            <p>Data from <a href="https://find-and-update.company-information.service.gov.uk/" target="_blank">Companies House</a> · Built by <a href="https://www.handonweb.com" target="_blank">Hand On Web</a></p>
+        </footer>
+    </div>
+
+    <script>
+        const input = document.getElementById('searchInput');
+        input.addEventListener('keypress', e => { if (e.key === 'Enter') searchCompany(); });
+
+        async function searchCompany() {
+            const query = input.value.trim();
+            if (!query) return;
+
+            const errorEl = document.getElementById('error');
+            const loadingEl = document.getElementById('loading');
+            const resultsEl = document.getElementById('results');
+
+            errorEl.style.display = 'none';
+            loadingEl.style.display = 'block';
+            resultsEl.innerHTML = '';
+
+            try {
+                const res = await fetch(`https://api.company-information.service.gov.uk/search/companies?q=${encodeURIComponent(query)}&items_per_page=5`);
+
+                if (res.status === 401 || res.status === 403) {
+                    // Fallback: link to Companies House search
+                    loadingEl.style.display = 'none';
+                    resultsEl.innerHTML = `
+                        <div class="card">
+                            <h2>Search on Companies House</h2>
+                            <p>Direct API access requires authentication. Use the official search:</p>
+                            <a href="https://find-and-update.company-information.service.gov.uk/search?q=${encodeURIComponent(query)}" target="_blank" class="ch-link">
+                                Search "${query}" on Companies House ↗
+                            </a>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const data = await res.json();
+                loadingEl.style.display = 'none';
+
+                if (!data.items || data.items.length === 0) {
+                    errorEl.textContent = 'No companies found. Try a different search term.';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+
+                resultsEl.innerHTML = data.items.map(c => {
+                    const status = c.company_status || 'unknown';
+                    const statusClass = status === 'active' ? 'status-active' : 'status-inactive';
+                    const chUrl = `https://find-and-update.company-information.service.gov.uk/company/${c.company_number}`;
+
+                    return `
+                        <div class="card">
+                            <div class="company-header">
+                                <h2>${c.title}</h2>
+                                <span class="status ${statusClass}">${status}</span>
+                            </div>
+                            <table>
+                                <tr><td><strong>Company Number</strong></td><td>${c.company_number}</td></tr>
+                                <tr><td><strong>Type</strong></td><td>${(c.company_type || '—').replace(/-/g, ' ')}</td></tr>
+                                <tr><td><strong>Incorporated</strong></td><td>${c.date_of_creation || '—'}</td></tr>
+                                <tr><td><strong>Address</strong></td><td>${c.address_snippet || '—'}</td></tr>
+                                <tr><td><strong>Full Details</strong></td><td><a href="${chUrl}" target="_blank">View on Companies House ↗</a></td></tr>
+                            </table>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                loadingEl.style.display = 'none';
+                // Fallback to direct link
+                resultsEl.innerHTML = `
+                    <div class="card">
+                        <h2>Search on Companies House</h2>
+                        <p>Search directly on the official Companies House website:</p>
+                        <a href="https://find-and-update.company-information.service.gov.uk/search?q=${encodeURIComponent(query)}" target="_blank" class="ch-link">
+                            Search "${query}" on Companies House ↗
+                        </a>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
